@@ -1,81 +1,95 @@
-from django.http import HttpResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import render
 from django.conf import settings
-from account.models import Accounts
-from friend_app.models import FriendsList
-from django.core import files
-import os
-# from django.core.files.storage import FileSystemStorage
+from .models import GroupChatRoom
+import random
+import time
+from agora_token_builder import RtcTokenBuilder
+from django.conf import settings
+from django.http import JsonResponse
 import json
-import base64
-from django.core.files.base import ContentFile
-
+from django.views.decorators.csrf import csrf_exempt
+from account.models import Accounts
 
 # Create your views here.
-#TEMP_PROFILE_IMAGE_NAME = "temp_profile_image.png"
+DEBUG = False
+
+"""
+Group Chat List
+"""
 
 
-def profile_index(request):
+def group_list(request):
     user = request.user
     if user.is_authenticated:
-        user_id = user.id
-        account = get_object_or_404(Accounts, pk=user_id)
-        friend_list = FriendsList.objects.get(user=account)
-        friends = friend_list.friends.all()
+        group_list = GroupChatRoom.objects.all()
         context = {
-            'account': account,
-            'friends': friends
+            'group_list': group_list
         }
-    return render(request, 'profile_app/profile.html', context)
+    return render(request, 'group_list.html', context)
 
 
-def edit_profile(request, *args, **kwargs):
-    context = {}
+"""
+Group Chat
+"""
+
+
+def group_detail(request, id):
+    room_id = GroupChatRoom.objects.get(id=id)
     user = request.user
-    if user.is_authenticated:
-        user_id = user.id
-        account = get_object_or_404(Accounts, pk=user_id)
-        friend_list = FriendsList.objects.get(user=account)
-        friends = friend_list.friends.all()
-        context["account"] = account
-        context["friends"] = friends
-        if request.method == 'POST':
-            email = request.POST.get("email")
-            username = request.POST.get("username")
-
-            account.email = email
-            account.username = username
-            account.save()
-            return redirect("profile-index")
-        else:
-            print("It is not a post")
-    else:
-        print("User not authenticated")
-    return render(request, 'profile_app/edit_profile.html', context)
+    context = {
+        'room_id': room_id.pk,
+        'room_detail': room_id,
+        'debug_mode': settings.DEBUG,
+        'debug': DEBUG,
+        'user': user
+    }
+    return render(request, 'group_detail.html', context)
 
 
-def save_temp_profile_image_from_base64String(imageString):
-    format, imgstr = imageString.split(';base64,')
-    ext = format.split('/')[-1]
-    img = base64.b64decode(imgstr)
-    file_data = ContentFile(img)
-    file_name = "'myphoto." + ext
-    return file_name, file_data
+def roomCall(request):
+    return render(request, 'call_room.html')
 
 
-def edit_profile_image(request):
-    payload = {}
-    user = request.user
-    if user.is_authenticated:
-        try:
-            ns = json.loads(request.body)
-            imageString = ns.get('image')
-            file_name, file_data = save_temp_profile_image_from_base64String(
-                imageString)
-            user.profile_image.save(
-                file_name, file_data)
-            payload['result'] = "success"
-        except Exception as e:
-            payload["result"] = "error"
-            payload["exception"] = str(e)
-    return HttpResponse(json.dumps(payload), content_type="application/json")
+def getToken(request):
+    appId = settings.APP_ID
+    app_certificate = settings.APP_CERTIFICATE
+    channel_name = request.GET.get("channel")
+    uid = random.randint(1, 230)
+    expirationTimeSeconds = 3600 * 24
+    currentTimeStamp = time.time()
+    privilegeExpiredTs = currentTimeStamp + expirationTimeSeconds
+    role = 1
+    token = RtcTokenBuilder.buildTokenWithUid(
+        appId, app_certificate, channel_name, uid, role, privilegeExpiredTs)
+    return JsonResponse({"token": token, "uid": uid, "appid": appId}, safe=False)
+
+
+def createMember(request):
+    data = {}
+    getData = json.loads(request.body)
+    name = getData['username']
+    uid = getData['UID']
+    room_name = getData['room_name']
+    user_id = request.user.id
+    acc = Accounts.objects.get(pk=user_id)
+    acc.uid = uid
+    acc.save()
+
+    data = {
+        "name": name,
+        'room_name': room_name
+    }
+    return JsonResponse(data=data, safe=False)
+
+
+def getMember(request):
+    data = {}
+    uid = request.GET.get('UID')
+    room_name = request.GET.get('room_name')
+    member = Accounts.objects.get(uid=uid)
+    name = member.username
+    data = {
+        'name': name,
+        'room_name': room_name
+    }
+    return JsonResponse(data=data, safe=False)

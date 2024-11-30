@@ -1,8 +1,12 @@
 from django.urls import path
-from .views import profile_index, edit_profile, edit_profile_image
+from .views import group_list, group_detail, getToken, roomCall, createMember, getMember
+
 
 urlpatterns = [
-    path('', profile_index, name="profile-index"),
-    path('edit-profile/', edit_profile, name="edit-profile"),
-    path('edit-profile-image/', edit_profile_image, name='edit-profile-image')
+    path('', group_list, name='group-list'),
+    path('group-detail/<id>/', group_detail, name='group-detail'),
+    path('get-token/', getToken, name="get-token"),
+    path('room/', roomCall, name='room-call'),
+    path('create-member/', createMember, name='create-member'),
+    path('get-member/', getMember, name='get-member')
 ]
