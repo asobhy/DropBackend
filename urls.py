@@ -1,8 +1,7 @@
 from django.urls import path
-from .views import profile_index, edit_profile, edit_profile_image
+from .views import notification_index
+
 
 urlpatterns = [
-    path('', profile_index, name="profile-index"),
-    path('edit-profile/', edit_profile, name="edit-profile"),
-    path('edit-profile-image/', edit_profile_image, name='edit-profile-image')
+    path('', notification_index, name="notification-index")
 ]
