@@ -1,81 +1,68 @@
+from itertools import chain
 from django.http import HttpResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import render, redirect
 from django.conf import settings
-from account.models import Accounts
-from friend_app.models import FriendsList
-from django.core import files
-import os
-# from django.core.files.storage import FileSystemStorage
 import json
-import base64
-from django.core.files.base import ContentFile
-
-
+from message_app.utils import find_or_create_private_chat
+from .models import PrivateChatRoom
+from account.models import Accounts
 # Create your views here.
-#TEMP_PROFILE_IMAGE_NAME = "temp_profile_image.png"
+
+DEBUG = True
 
 
-def profile_index(request):
-    user = request.user
-    if user.is_authenticated:
-        user_id = user.id
-        account = get_object_or_404(Accounts, pk=user_id)
-        friend_list = FriendsList.objects.get(user=account)
-        friends = friend_list.friends.all()
-        context = {
-            'account': account,
-            'friends': friends
-        }
-    return render(request, 'profile_app/profile.html', context)
-
-
-def edit_profile(request, *args, **kwargs):
+def private_chat_room_view(request, *args, **kwargs):
     context = {}
     user = request.user
-    if user.is_authenticated:
-        user_id = user.id
-        account = get_object_or_404(Accounts, pk=user_id)
-        friend_list = FriendsList.objects.get(user=account)
-        friends = friend_list.friends.all()
-        context["account"] = account
-        context["friends"] = friends
-        if request.method == 'POST':
-            email = request.POST.get("email")
-            username = request.POST.get("username")
+    room_id = request.POST.get("room_id")
+    if not user.is_authenticated:
+        return HttpResponse("This user is not authenticated")
 
-            account.email = email
-            account.username = username
-            account.save()
-            return redirect("profile-index")
-        else:
-            print("It is not a post")
-    else:
-        print("User not authenticated")
-    return render(request, 'profile_app/edit_profile.html', context)
-
-
-def save_temp_profile_image_from_base64String(imageString):
-    format, imgstr = imageString.split(';base64,')
-    ext = format.split('/')[-1]
-    img = base64.b64decode(imgstr)
-    file_data = ContentFile(img)
-    file_name = "'myphoto." + ext
-    return file_name, file_data
-
-
-def edit_profile_image(request):
-    payload = {}
-    user = request.user
-    if user.is_authenticated:
+    if room_id:
         try:
-            ns = json.loads(request.body)
-            imageString = ns.get('image')
-            file_name, file_data = save_temp_profile_image_from_base64String(
-                imageString)
-            user.profile_image.save(
-                file_name, file_data)
-            payload['result'] = "success"
-        except Exception as e:
-            payload["result"] = "error"
-            payload["exception"] = str(e)
+            room = PrivateChatRoom.objects.get(pk=room_id)
+            context['room'] = room
+        except PrivateChatRoom.DoesNotExist:
+            pass
+
+    room1 = PrivateChatRoom.objects.filter(user1=user, is_active=True)
+    room2 = PrivateChatRoom.objects.filter(user2=user, is_active=True)
+    rooms = list(chain(room1, room2))
+
+    m_and_f = []
+
+    for room in rooms:
+        if room.user1 == user:
+            friend = room.user2
+        else:
+            friend = room.user1
+        m_and_f.append({
+            "message": "",
+            "friend": friend
+        })
+    print(m_and_f)
+    context["m_and_f"] = m_and_f
+    context['debug'] = DEBUG
+    context['debug_mode'] = settings.DEBUG
+
+    return render(request, "message_app/message.html", context)
+
+
+def create_or_return_private_chat(request, *args, **kwargs):
+    user1 = request.user
+    payload = {}
+    if user1.is_authenticated:
+        if request.method == "POST":
+            user2_id = kwargs.get("user2_id")
+            print(user2_id)
+            try:
+                user2 = Accounts.objects.get(pk=user2_id)
+                chat = find_or_create_private_chat(user1, user2)
+                print(chat.id)
+                payload['response'] = "Successfully got the chat"
+                payload['chatroom_id'] = chat.id
+            except Accounts.DoesNotExist:
+                payload['response'] = "Unable to start a chat with that user."
+    else:
+        payload['response'] = "You can't start a chat if you are not authenticated."
     return HttpResponse(json.dumps(payload), content_type="application/json")

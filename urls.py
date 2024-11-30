@@ -1,8 +1,8 @@
 from django.urls import path
-from .views import profile_index, edit_profile, edit_profile_image
+from .views import private_chat_room_view, create_or_return_private_chat
 
 urlpatterns = [
-    path('', profile_index, name="profile-index"),
-    path('edit-profile/', edit_profile, name="edit-profile"),
-    path('edit-profile-image/', edit_profile_image, name='edit-profile-image')
+    path('', private_chat_room_view, name="private-chat-room"),
+    path('create-or-return-private-chat/<user2_id>/', create_or_return_private_chat,
+         name="create-or-return-private-chat")
 ]
